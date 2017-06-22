@@ -7,7 +7,8 @@
 #include <istream>
 #include <fstream>
 
-#define SELF 0
+#define SELF  0
+#define STORE 1
 
 #define ATOM 0
 #define RVAR 1
@@ -34,28 +35,39 @@ bool operator==(Item a, Item b) { if(a.type!=b.type&&a.type!=VAR &&b.type!=VAR
 struct Term { std::string var; std::vector<Item> r;
               Term(std::string _v, std::vector<Item> _r) { var = _v; r = _r; }
               Term() { } };
-struct Rule { int loc; std::vector<Item> in; std::vector<Item> out;
+struct Rule { int loc; int outtype; std::vector<Item> in; std::vector<Item> out;
               std::unordered_map<std::string,std::vector<Item>> ts; int exprn;
-              Rule(std::vector<Item> _in, std::vector<Item> _out) {
+              Rule(int _o, std::vector<Item> _in, std::vector<Item> _out) {
                 ts = std::unordered_map<std::string,std::vector<Item>>();
-                in = _in, out = _out; exprn = 0; loc = 0; } };
+                in = _in, out = _out; outtype = _o; exprn = 0; loc = 0; } };
 Item rules_loc(Rule r, int loc) { return r.in[loc]; }
 
-std::vector<Rule> d_rules = { Rule((std::vector<Item>){ Item("Just",ATOM), Item("$a",VAR) }
+std::vector<Rule> d_rules = { Rule(STORE
+                                  ,(std::vector<Item>){ Item("Rule",ATOM), Item("$a",VAR), Item("$b",VAR) }
+                                  ,std::vector<Item>())
+                             ,Rule(SELF
+                                  ,(std::vector<Item>){ Item("Just",ATOM), Item("$a",VAR) }
                                   ,(std::vector<Item>){ Item("$a",VAR) }) };
+
+std::vector<Item> w_close(std::vector<Item> a) { a.pop_back();
+  std::vector<Item> ret(a.size()-1); for(int i=0;i<ret.size();i++) { ret[i] = a[i+1]; }
+  return ret; }
 
 std::vector<Item> exec_rule(std::vector<Item> expr, std::vector<Rule> rules, Rule a) {
   /*p_stk(expr); p_stk(a.in); return a.out;*/
   std::vector<Item> ret;
-  for(int i=0;i<a.out.size();i++) {
-    if(a.out[i].type==VAR) { auto q = a.ts[a.out[i].dat];
-                             ret.insert(ret.end(),q.begin(),q.end()); }
-    else { ret.push_back(a.out[i]); } }
+  if(a.outtype==STORE) { auto qa = a.ts["$a"]; auto qb = a.ts["$b"];
+    rules.push_back(Rule(SELF,w_close(qa),w_close(qb))); }
+  else {
+    for(int i=0;i<a.out.size();i++) {
+      if(a.out[i].type==VAR) { auto q = a.ts[a.out[i].dat];
+                               ret.insert(ret.end(),q.begin(),q.end()); }
+      else { ret.push_back(a.out[i]); } } }
   int q = 0; int exprn = 0;
   for(int i=0;i<a.in.size();q++) { if(expr[expr.size()-1-q].dat=="(") { exprn--; }
     else if(expr[expr.size()-1-q].dat==")") { exprn++; }
     if(!exprn) { i++; } }
-  expr.erase(expr.begin(),expr.end()-q); return expr; }
+  expr.resize(expr.size()-q); expr.insert(expr.end(),ret.begin(),ret.end()); return expr; }
 
 // modifies locs
 // warning: not well written
@@ -71,7 +83,8 @@ std::vector<Item> match_rule(std::vector<Item> expr, Item q, std::vector<Rule> &
     else { locs[i] = 0; }
     if(locs[i]>=rules[i].in.size()) {
       locs[i] = 0; expr.push_back(q);
-      expr = exec_rule(expr,rules,rules[i]); rules[i] = Rule(rules[i].in,rules[i].out); return expr; } }
+      expr = exec_rule(expr,rules,rules[i]);
+      rules[i] = Rule(rules[i].outtype,rules[i].in,rules[i].out); return expr; } }
   expr.push_back(q); return expr; }
 
 std::vector<Item> lex_and_parse(std::ifstream &a, std::vector<Rule> rules, std::vector<Item> vars) {
