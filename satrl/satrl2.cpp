@@ -45,15 +45,16 @@ Item rules_loc(Rule r, int loc) { return r.in[loc]; }
 std::vector<Rule> d_rules = { Rule(STORE
                                   ,(std::vector<Item>){ Item("Rule",ATOM), Item("$a",VAR), Item("$b",VAR) }
                                   ,std::vector<Item>())
-                             ,Rule(SELF
+                             /*,Rule(SELF
                                   ,(std::vector<Item>){ Item("Just",ATOM), Item("$a",VAR) }
-                                  ,(std::vector<Item>){ Item("$a",VAR) }) };
+                                  ,(std::vector<Item>){ Item("$a",VAR) })*/ };
 
-std::vector<Item> w_close(std::vector<Item> a) { a.pop_back();
-  std::vector<Item> ret(a.size()-1); for(int i=0;i<ret.size();i++) { ret[i] = a[i+1]; }
+std::vector<Item> w_close(std::vector<Item> a) { if(a[0].dat!="(") { return a; }
+  a.pop_back(); std::vector<Item> ret(a.size()-1); for(int i=0;i<ret.size();i++) { ret[i] = a[i+1]; }
   return ret; }
 
-std::vector<Item> exec_rule(std::vector<Item> expr, std::vector<Rule> rules, Rule a) {
+// warning: modifies rules
+std::vector<Item> exec_rule(std::vector<Item> expr, std::vector<Rule> &rules, Rule a) {
   /*p_stk(expr); p_stk(a.in); return a.out;*/
   std::vector<Item> ret;
   if(a.outtype==STORE) { auto qa = a.ts["$a"]; auto qb = a.ts["$b"];
