@@ -3,9 +3,12 @@
 
 #include <vector>
 #include <tuple>
+#include <regex>
+#include <string>
 #include <unordered_map>
 #include <istream>
 #include <fstream>
+#include <sstream>
 
 #define SELF  0
 #define STORE 1
@@ -24,12 +27,16 @@ struct Item { std::string dat; int type;
   if(a->type == GRP) { printf("(");
     for(int i=0;i<a->grp.size();i++) { item_print(a->grp[i]); }
     printf (")"); } else { printf(" %s ",a->dat.c_str()); } }*/
-void p_stk(std::vector<Item> a) {
-  for(int i=0;i<a.size();i++) { printf("%s ",a[i].dat.c_str()); } printf("\n"); }
+std::string show_stk(std::vector<Item> a) { std::stringstream s;
+  for(int i=0;i<a.size()-1;i++) { if(a[i].dat=="("||a[i+1].dat==")") { s << a[i].dat; }
+    else { s << a[i].dat << " "; } }
+  s << a[a.size()-1].dat;
+  return s.str(); }
 bool operator==(Item a, Item b) { if(a.type!=b.type&&a.type!=VAR &&b.type!=VAR
                                                    &&a.type!=RVAR&&b.type!=RVAR) { return false; }
   switch(b.type) { case ATOM: return a.dat==b.dat; break;
-                   case RVAR: return false; break; // not supported yet.
+                   case RVAR: { std::stringstream s(b.dat); std::string reg; s >> reg;
+                                return std::regex_match(a.dat,std::regex(reg)); break; }
                    case VAR: return true; } }
 // typedef std::vector<Item> Stk;
 struct Term { std::string var; std::vector<Item> r;
@@ -73,13 +80,16 @@ std::vector<Item> exec_rule(std::vector<Item> expr, std::vector<Rule> &rules, Ru
 // modifies locs
 // warning: not well written
 std::vector<Item> match_rule(std::vector<Item> expr, Item q, std::vector<Rule> &rules, std::vector<int> &locs) {
-  for(int i=0;i<rules.size();i++) {
-    if(q==rules_loc(rules[i],locs[i])) {
-      if(rules_loc(rules[i],locs[i]).type==VAR) { if(q.dat=="(") { rules[i].exprn++; }
+  for(int i=0;i<rules.size();i++) { Item e = rules_loc(rules[i],locs[i]);
+    if(q==e) {
+      if(e.type==VAR) { if(q.dat=="(") { rules[i].exprn++; }
         else if(q.dat==")") { rules[i].exprn--; }
         //else if(rules[i].exprn) { rules[i].ts[rules_loc(rules[i],locs[i]).dat].push_back(q); }
-        rules[i].ts[rules_loc(rules[i],locs[i]).dat].push_back(q);
+        rules[i].ts[e.dat].push_back(q);
         if(!rules[i].exprn) { locs[i]++; } }
+      else if(e.type==RVAR) { std::stringstream s(e.dat); std::string reg; std::string var;
+        s >> reg >> var;
+        rules[i].ts[var].push_back(q); locs[i]++; }
       else { locs[i]++; } }
     else { locs[i] = 0; }
     if(locs[i]>=rules[i].in.size()) {
@@ -88,7 +98,8 @@ std::vector<Item> match_rule(std::vector<Item> expr, Item q, std::vector<Rule> &
       rules[i] = Rule(rules[i].outtype,rules[i].in,rules[i].out); return expr; } }
   expr.push_back(q); return expr; }
 
-std::vector<Item> lex_and_parse(std::ifstream &a, std::vector<Rule> rules, std::vector<Item> vars) {
+template <typename T>
+std::vector<Item> lex_and_parse(T &a, std::vector<Rule> rules, std::vector<Item> vars) {
   auto locs = std::vector<int>(rules.size(),0);
   for(int i=0;i<locs.size();i++) { locs[i] = rules[i].loc; }
   a >> std::ws; std::vector<Item> expr;
@@ -99,15 +110,20 @@ std::vector<Item> lex_and_parse(std::ifstream &a, std::vector<Rule> rules, std::
                 break; }
     case '$': { std::string q; a >> q; if(q.back()==')') { q.pop_back(); a.putback(')'); }
                 expr = match_rule(expr,Item(q,VAR),rules,locs); break; }
-    case '[': { a.ignore(1); char *qc; a.get(qc,BUFMAX,']'); a.ignore(1); std::string qr(qc);
-                std::string q; a >> q; qr += " " + q;
-                expr = match_rule(expr,Item(qr,RVAR),rules,locs); break; }
+    case '\\': { a.ignore(1); std::string qr; std::getline(a,qr,'\\');
+                 std::string q; a >> q; qr += " " + q;
+                 expr = match_rule(expr,Item(qr,RVAR),rules,locs); break; }
     default: { std::string q; a >> q; if(q.back()==')') { q.pop_back(); a.putback(')'); }
                expr = match_rule(expr,Item(q,ATOM),rules,locs); break; } } }
   return expr; }
 
+// DONE: add simple file imports and regex-match support.
 int main(int argc, char **argv) {
   std::ifstream file; file.open(argv[1]);
-  std::vector<Item> f = lex_and_parse(file,d_rules,std::vector<Item>());
-  p_stk(f);
+  // DONE: create 'show' function for Stks and continue parsing until in normal form.
+  std::vector<Item> f; std::string f_show = show_stk(lex_and_parse(file,d_rules,std::vector<Item>()));
+  while(true) { std::stringstream f_s(f_show);
+    f = lex_and_parse(f_s,d_rules,std::vector<Item>());
+    if(show_stk(f)==f_show) { break; } else { f_show = show_stk(f); } }
+  printf("%s\n",show_stk(f).c_str());
   /*item_destroy(f);*/ return 0; }
