@@ -104,18 +104,20 @@ std::vector<Item> lex_and_parse(T &a, std::vector<Rule> rules, std::vector<Item>
   for(int i=0;i<locs.size();i++) { locs[i] = rules[i].loc; }
   a >> std::ws; std::vector<Item> expr;
   while(!a.eof()) { a >> std::ws; switch(a.peek()) {
+    case EOF: break;
     case ')': { a.ignore(1); expr = match_rule(expr,Item(")",ATOM),rules,locs);
                 break; }
     case '(': { a.ignore(1); expr = match_rule(expr,Item("(",ATOM),rules,locs);
                 break; }
-    case '$': { std::string q; a >> q; if(q.back()==')') { q.pop_back(); a.putback(')'); }
+    case '$': { std::string q; a >> q; while(q.back()==')') { q.pop_back(); a.putback(')'); }
                 expr = match_rule(expr,Item(q,VAR),rules,locs); break; }
     case '\\': { a.ignore(1); std::string qr; std::getline(a,qr,'\\');
-                 std::string q; a >> q; qr += " " + q;
+                 std::string q; a >> q; while(q.back()==')') { q.pop_back(); a.putback(')'); }
+                 qr += " " + q;
                  expr = match_rule(expr,Item(qr,RVAR),rules,locs); break; }
-    default: { std::string q; a >> q; if(q.back()==')') { q.pop_back(); a.putback(')'); }
+    default: { std::string q; a >> q; while(q.back()==')') { q.pop_back(); a.putback(')'); }
                expr = match_rule(expr,Item(q,ATOM),rules,locs); break; } } }
-  return expr; }
+  d_rules = rules; return expr; }
 
 // DONE: add simple file imports and regex-match support.
 int main(int argc, char **argv) {
@@ -123,6 +125,7 @@ int main(int argc, char **argv) {
   // DONE: create 'show' function for Stks and continue parsing until in normal form.
   std::vector<Item> f; std::string f_show = show_stk(lex_and_parse(file,d_rules,std::vector<Item>()));
   while(true) { std::stringstream f_s(f_show);
+    printf("%s\n",f_show.c_str());
     f = lex_and_parse(f_s,d_rules,std::vector<Item>());
     if(show_stk(f)==f_show) { break; } else { f_show = show_stk(f); } }
   printf("%s\n",show_stk(f).c_str());
