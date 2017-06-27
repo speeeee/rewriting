@@ -1,0 +1,4 @@
+Rule (S $x $y $z) (($x $z ($y $z)))
+Rule (K $x $y) $x
+Rule (I $x) $x
+S a I c
